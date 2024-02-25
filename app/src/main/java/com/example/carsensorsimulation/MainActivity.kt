@@ -16,8 +16,13 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -25,10 +30,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.carsensorsimulation.ui.theme.CarSensorSimulationTheme
@@ -96,7 +105,7 @@ class MainActivity : ComponentActivity() {
         override fun onProviderDisabled(provider: String) {
         }
     }
-    //define sensorListener to get the data of sensors
+    //define sensorListener after get the data of sensors
     private val sensorListener = object : SensorEventListener {
         override fun onSensorChanged(p0: SensorEvent?) {
             p0 ?: return
@@ -159,20 +168,30 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
+fun Greeting(name: String) {
     Surface(color = Color.Cyan) {
         Text(
             text = "Speed: ${speedState.value}!\nAccelerometer: ${acc.value}! " +
                     "\nGyroscope: ${gyro.value}!\nLinear: ${linAcc.value}!\nRotation: ${rotat.value}!",
-            modifier = modifier.padding(24.dp)
+            modifier = Modifier.size(400.dp, 200.dp),
+            style = TextStyle(
+                fontSize = 30.sp
+            )
         )
     }
 }
 
 @Composable
 fun RecordButton(abnormalType: String) {
-    Button(onClick = { /*TODO*/ }) {
-        Text(text = abnormalType)
+    Button(
+        onClick = { /*TODO*/ },
+        modifier = Modifier.padding(4.dp),
+    ) {
+        Text(
+            text = abnormalType,
+            style = TextStyle(
+                fontSize = 15.sp
+            ))
     }
 }
 
@@ -180,11 +199,29 @@ fun RecordButton(abnormalType: String) {
 @Composable
 fun GreetingPreview() {
     CarSensorSimulationTheme {
-        Greeting("Zeason Juan")
-        RecordButton(abnormalType = "坑")
-        RecordButton(abnormalType = "异物")
-        RecordButton(abnormalType = "积水")
-        RecordButton(abnormalType = "裂缝")
-        RecordButton(abnormalType = "积雪")
+        ConstraintLayout (modifier = Modifier.fillMaxSize()){
+            Surface(color = Color.Black) {
+                val (row) = createRefs()
+
+                Box(modifier = Modifier.constrainAs(row) {
+                    bottom.linkTo(parent.bottom, margin = 16.dp)
+                }.fillMaxSize(),
+                    contentAlignment = Alignment.BottomCenter) {
+                        Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                            RecordButton(abnormalType = "坑")
+                            RecordButton(abnormalType = "异物")
+                            RecordButton(abnormalType = "积水")
+                            RecordButton(abnormalType = "裂缝")
+                            RecordButton(abnormalType = "积雪")
+                    }
+
+                }
+
+                Greeting("Zeason Juan")
+//
+            }
+
+        }
+
     }
 }
