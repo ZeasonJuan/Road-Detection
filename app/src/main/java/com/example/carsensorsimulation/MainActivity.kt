@@ -69,7 +69,13 @@ class MainActivity : ComponentActivity() {
 
     //cache that used for store the sensor data temporarily
     private val cacheSize = 10 * 1024 * 1024
-    private val lruCache = LruCache<Long, kotlin.Array<FloatArray?>>(cacheSize)
+    private val sensorDataCache = LruCache<Int, kotlin.Array<FloatArray?>>(cacheSize)
+    private val timeCache = LruCache<Int, Long>(cacheSize / 1024)
+    private val speedCache = LruCache<Int, Float>(cacheSize / 1024)
+    private var key = 0
+    private var realSpeed: Float = 0.0f
+
+
 
 
     //an simple fun to clear time array
@@ -159,6 +165,7 @@ class MainActivity : ComponentActivity() {
             if (location.hasSpeed()) {
                 val speed = location.speed
                 updateSpeedOnUI(speed, "speed")
+                realSpeed = speed
             }
         }
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
@@ -203,7 +210,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
             if (arrayOfSensors.all { it != null }) {
-                lruCache.put(System.currentTimeMillis(), arrayOfSensors)
+                sensorDataCache.put(key, arrayOfSensors)
+                timeCache.put(key, System.currentTimeMillis())
+                speedCache.put(key, realSpeed)
+                key++
             }
         }
         override fun onAccuracyChanged(p0: Sensor?, p1: Int) {
