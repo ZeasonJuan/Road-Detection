@@ -14,6 +14,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.util.Log
+import android.util.LruCache
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,8 @@ import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.carsensorsimulation.ui.theme.CarSensorSimulationTheme
+import java.sql.Array
+
 private const val REQUEST_LOCATION_PERMISSION = 1
 private lateinit var sensorManager: SensorManager
 private var n = 3.0
@@ -58,6 +61,64 @@ class MainActivity : ComponentActivity() {
     private var rotationVector: Sensor? = null
     private lateinit var locationManager: LocationManager
 
+
+    private var arrayOfSensors = arrayOfNulls<FloatArray>(4)
+    //an array used to mark the time at which each sensor get the data
+    private var arrayOfTimes = arrayOfNulls<Long>(4)
+
+
+    //cache that used for store the sensor data temporarily
+    private val cacheSize = 10 * 1024 * 1024
+    private val lruCache = LruCache<Long, kotlin.Array<FloatArray?>>(cacheSize)
+
+
+    //an simple fun to clear time array
+    fun timeArrayClear() {
+        for(i in arrayOfTimes.indices) {
+            arrayOfTimes[i] = null
+        }
+    }
+
+    //another simple fun to clear sensor array
+    fun sensorArrayClear() {
+        for(i in arrayOfSensors.indices) {
+            arrayOfSensors[i] = null
+        }
+    }
+
+    fun bothArrayClear() {
+        sensorArrayClear()
+        timeArrayClear()
+    }
+
+    //Find the earliest time of the array
+    fun getEarliestTime(): Long? {
+        if (arrayOfTimes.all { it == null }) {
+            return System.currentTimeMillis()
+        }
+        var earliestTime: Long? = Long.MAX_VALUE
+        for (i in arrayOfTimes.indices) {
+            if (arrayOfTimes[i] == null) {
+                continue
+            }
+            if (arrayOfTimes[i]!! < earliestTime!!) {
+                earliestTime = arrayOfTimes[i]
+            }
+        }
+        return earliestTime
+    }
+
+    //fun that judge the time is out or not
+    fun isTimeOut(): Boolean {
+        return (System.currentTimeMillis() - getEarliestTime()!!) / 1000 > 0.1
+    }
+
+    fun timeJudge() {
+        if (isTimeOut()) {
+            bothArrayClear()
+        }
+    }
+
     fun replaceRunOnUi(state: MutableState<Float>?) {
         state ?: return
         runOnUiThread {
@@ -66,6 +127,8 @@ class MainActivity : ComponentActivity() {
             Log.d("UpdateUI", "UI updated with n = $n")
         }
     }
+
+
 
     //a little function to display some data in screen
     fun updateSpeedOnUI(data: Float, typeOfData: String?) {
@@ -109,19 +172,38 @@ class MainActivity : ComponentActivity() {
     private val sensorListener = object : SensorEventListener {
         override fun onSensorChanged(p0: SensorEvent?) {
             p0 ?: return
+            //judge if this four sensor data is out, if so, delete them all
+            timeJudge()
+
             when(p0.sensor.type) {
                 Sensor.TYPE_ACCELEROMETER -> {
+                    //display X axis of the sensor
                     updateSpeedOnUI(p0.values[0], "accelerometer")
+
+                    arrayOfSensors[0] = p0.values
+                    arrayOfTimes[0] = System.currentTimeMillis()
                 }
                 Sensor.TYPE_GYROSCOPE -> {
                     updateSpeedOnUI(p0.values[0], "gyroscope")
+
+                    arrayOfSensors[1] = p0.values
+                    arrayOfTimes[1] = System.currentTimeMillis()
                 }
                 Sensor.TYPE_LINEAR_ACCELERATION -> {
                     updateSpeedOnUI(p0.values[0], "linear")
+
+                    arrayOfSensors[2] = p0.values
+                    arrayOfTimes[2] = System.currentTimeMillis()
                 }
                 Sensor.TYPE_ROTATION_VECTOR -> {
                     updateSpeedOnUI(p0.values[0], "rotation")
+
+                    arrayOfSensors[3] = p0.values
+                    arrayOfTimes[3] = System.currentTimeMillis()
                 }
+            }
+            if (arrayOfSensors.all { it != null }) {
+                lruCache.put(System.currentTimeMillis(), arrayOfSensors)
             }
         }
         override fun onAccuracyChanged(p0: Sensor?, p1: Int) {
@@ -191,7 +273,8 @@ fun RecordButton(abnormalType: String) {
             text = abnormalType,
             style = TextStyle(
                 fontSize = 15.sp
-            ))
+            )
+        )
     }
 }
 
