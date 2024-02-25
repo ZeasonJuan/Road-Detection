@@ -41,7 +41,15 @@ import androidx.compose.ui.unit.sp
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.room.Room
+import com.example.carsensorsimulation.Entities.SensorData
+import com.example.carsensorsimulation.RoomDatabase.AppDatabase
 import com.example.carsensorsimulation.ui.theme.CarSensorSimulationTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
 import java.sql.Array
 
 private const val REQUEST_LOCATION_PERMISSION = 1
@@ -52,6 +60,12 @@ var acc = mutableStateOf(0f)
 var gyro = mutableStateOf(0f)
 var linAcc = mutableStateOf(0f)
 var rotat = mutableStateOf(0f)
+private const val cacheSize = 10 * 1024 * 1024
+private val sensorDataCache = LruCache<Int, kotlin.Array<FloatArray>>(cacheSize)
+private val timeCache = LruCache<Int, Long>(cacheSize / 1024)
+private val speedCache = LruCache<Int, Float>(cacheSize / 1024)
+private var key = 0
+private var db: AppDatabase? = null
 
 class MainActivity : ComponentActivity() {
     private lateinit var sensorManager: SensorManager
@@ -62,21 +76,24 @@ class MainActivity : ComponentActivity() {
     private lateinit var locationManager: LocationManager
 
 
+
     private var arrayOfSensors = arrayOfNulls<FloatArray>(4)
     //an array used to mark the time at which each sensor get the data
     private var arrayOfTimes = arrayOfNulls<Long>(4)
 
 
     //cache that used for store the sensor data temporarily
-    private val cacheSize = 10 * 1024 * 1024
-    private val sensorDataCache = LruCache<Int, kotlin.Array<FloatArray?>>(cacheSize)
-    private val timeCache = LruCache<Int, Long>(cacheSize / 1024)
-    private val speedCache = LruCache<Int, Float>(cacheSize / 1024)
-    private var key = 0
+
     private var realSpeed: Float = 0.0f
 
 
 
+    fun removeCache() {
+        speedCache.evictAll()
+        sensorDataCache.evictAll()
+        timeCache.evictAll()
+        key = 0
+    }
 
     //an simple fun to clear time array
     fun timeArrayClear() {
@@ -116,7 +133,7 @@ class MainActivity : ComponentActivity() {
 
     //fun that judge the time is out or not
     fun isTimeOut(): Boolean {
-        return (System.currentTimeMillis() - getEarliestTime()!!) / 1000 > 0.1
+        return secondBetweenNowAnd(getEarliestTime()!!) > 0.1
     }
 
     fun timeJudge() {
@@ -243,7 +260,16 @@ class MainActivity : ComponentActivity() {
         sensorManager.registerListener(sensorListener, linearAccelerometer, SensorManager.SENSOR_DELAY_NORMAL)
         sensorManager.registerListener(sensorListener, rotationVector, SensorManager.SENSOR_DELAY_NORMAL)
 
-
+        lifecycleScope.launch {
+            db = withContext(Dispatchers.IO) {
+                // 确保这里导入了 AppDatabase 的正确路径
+                Room.databaseBuilder(
+                    applicationContext,
+                    AppDatabase::class.java,
+                    "database-name"
+                ).build()
+            }
+        }
 
         setContent {
             CarSensorSimulationTheme {
@@ -257,6 +283,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+//a more convenient way to calculate second
+fun secondBetweenNowAnd(time: Long): Long {
+    return (System.currentTimeMillis() - time) / 1000
 }
 
 @Composable
@@ -276,7 +307,35 @@ fun Greeting(name: String) {
 @Composable
 fun RecordButton(abnormalType: String) {
     Button(
-        onClick = { /*TODO*/ },
+        onClick = {
+            var sensorDataList = ArrayList<SensorData>()
+            for (i in 0..key-1) {
+
+                //if the record is too long ago, pass it
+                if (secondBetweenNowAnd(timeCache.get(i)) > 5.0) {
+                    continue
+                }
+                var thisSensorRecord = SensorData(
+                    accelerometerX = sensorDataCache.get(i)[0][0],
+                    accelerometerY = sensorDataCache.get(i)[0][1],
+                    accelerometerZ = sensorDataCache.get(i)[0][2],
+                    gyroscopeX = sensorDataCache.get(i)[1][0],
+                    gyroscopeY = sensorDataCache.get(i)[1][1],
+                    gyroscopeZ = sensorDataCache.get(i)[1][2],
+                    linearAccelerometerX = sensorDataCache.get(i)[2][0],
+                    linearAccelerometerY = sensorDataCache.get(i)[2][1],
+                    linearAccelerometerZ = sensorDataCache.get(i)[2][2],
+                    rotationVectorX = sensorDataCache.get(i)[3][0],
+                    rotationVectorY = sensorDataCache.get(i)[3][1],
+                    rotationVectorZ = sensorDataCache.get(i)[3][2],
+                    time = timeCache.get(i),
+                    roadType = abnormalType
+                )
+                sensorDataList.add(thisSensorRecord)
+            }
+            //Open a new thread so that write records in Room Database
+            
+        },
         modifier = Modifier.padding(4.dp),
     ) {
         Text(
